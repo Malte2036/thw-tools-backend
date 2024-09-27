@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  Header,
+  Headers,
   HttpException,
   HttpStatus,
   Logger,
@@ -41,7 +43,10 @@ export class QuizController {
   async getQuestion(
     @Param('questionType') questionType: QuizType,
     @Param('questionNumber') questionNumber: number,
+    @Headers() headers,
   ) {
+    console.log(headers);
+
     const question = await this.questionService.getQuestion(
       questionType,
       questionNumber,
