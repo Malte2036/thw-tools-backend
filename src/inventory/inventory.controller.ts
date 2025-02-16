@@ -5,73 +5,43 @@ import {
   HttpStatus,
   Logger,
   Param,
-  Patch,
   Post,
   Body,
-  Req,
-  UploadedFile,
+  Put,
+  Delete,
   UseInterceptors,
+  UploadedFile,
+  Req,
+  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
-import mongoose from 'mongoose';
-
-import { getUserAndOrgFromRequestAndThrow } from 'src/funk/funk.controller';
-import { OrganisationService } from 'src/organisation/organisation.service';
-import { UserService } from 'src/user/user.service';
-import { InventoryService } from './inventory.service';
 import { Request } from 'express';
-import { InventoryItemCustomData } from './schemas/inventory-item-custom-data.schema';
-import {
-  UpdateCustomDataDto,
-  UpdateCustomDataSchema,
-} from './dto/update-custom-data.dto';
+import { InventoryService } from './inventory.service';
+import type { InventoryItem, InventoryItemCustomData } from '@prisma/client';
+import { UpdateCustomDataSchema } from './dto/update-custom-data.dto';
+import { getUserAndOrgFromRequestAndThrow } from 'src/funk/funk.controller';
+import { UserService } from 'src/user/user.service';
+import { OrganisationService } from 'src/organisation/organisation.service';
 
 @ApiTags('inventory')
 @Controller('inventory')
 export class InventoryController {
   constructor(
+    private readonly inventoryService: InventoryService,
     private readonly userService: UserService,
     private readonly organisationService: OrganisationService,
-    private readonly inventoryService: InventoryService,
   ) {}
 
   @Get()
-  async getInventoryItems(@Req() req: Request) {
+  async findAll(@Req() req: Request): Promise<InventoryItem[]> {
     const [, organisation] = await getUserAndOrgFromRequestAndThrow(
       req,
       this.userService,
       this.organisationService,
     );
-
     Logger.log('Getting inventory items');
-    return this.inventoryService.getInventoryItems(organisation._id);
-  }
-
-  @Get(':id')
-  async getInventoryItem(@Req() req: Request, @Param('id') id: string) {
-    const [, organisation] = await getUserAndOrgFromRequestAndThrow(
-      req,
-      this.userService,
-      this.organisationService,
-    );
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new HttpException('Invalid ID format', HttpStatus.BAD_REQUEST);
-    }
-
-    Logger.log(`Getting inventory item by ID: ${id}`);
-
-    const item = await this.inventoryService.getInventoryItemById(
-      organisation._id,
-      new mongoose.Types.ObjectId(id),
-    );
-
-    if (!item) {
-      throw new HttpException('Inventory item not found', HttpStatus.NOT_FOUND);
-    }
-
-    return item;
+    return this.inventoryService.findAllByOrganisation(organisation.id);
   }
 
   @Post('import/csv')
@@ -104,7 +74,7 @@ export class InventoryController {
     );
 
     const res = await this.inventoryService.parseCsvData(organisation, file);
-    Logger.log('Processed CSV data', res);
+    Logger.log('Processed CSV data');
     return res;
   }
 
@@ -113,14 +83,14 @@ export class InventoryController {
     @Req() req: Request,
     @Param('id') id: string,
     @Body() rawCustomData: unknown,
-  ) {
-    const [, organisation] = await getUserAndOrgFromRequestAndThrow(
+  ): Promise<InventoryItem> {
+    await getUserAndOrgFromRequestAndThrow(
       req,
       this.userService,
       this.organisationService,
     );
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       throw new HttpException('Invalid ID format', HttpStatus.BAD_REQUEST);
     }
 
@@ -137,23 +107,11 @@ export class InventoryController {
       );
     }
 
-    const item = await this.inventoryService.getInventoryItemById(
-      organisation._id,
-      new mongoose.Types.ObjectId(id),
-    );
-
-    if (!item) {
-      throw new HttpException('Inventory item not found', HttpStatus.NOT_FOUND);
-    }
-
-    const updatedCustomData = await this.inventoryService.updateCustomData(
-      item._id,
+    const updatedItem = await this.inventoryService.updateCustomData(
+      id,
       validationResult.data,
     );
 
-    return {
-      _id: item._id,
-      customData: updatedCustomData,
-    };
+    return updatedItem;
   }
 }

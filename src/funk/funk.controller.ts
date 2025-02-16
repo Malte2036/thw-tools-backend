@@ -11,20 +11,18 @@ import {
   Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { OrganisationService } from 'src/organisation/organisation.service';
-import { OrganisationDocument } from 'src/organisation/schemas/organisation.schema';
-import { UserDocument } from 'src/user/schemas/user.schema';
-import { UserService } from 'src/user/user.service';
-import { FunkService } from './funk.service';
-import { FunkItemEventType } from './schemas/funk-item-event.schema';
+import type { FunkItemEventType, Organisation, User } from '@prisma/client';
 import { Request } from 'express';
+import { OrganisationService } from '../organisation/organisation.service';
+import { UserService } from '../user/user.service';
+import { FunkService } from './funk.service';
 
 export async function getUserAndOrgFromRequest(
   req: Request,
   userService: UserService,
   organisationService: OrganisationService,
-): Promise<[UserDocument | null, OrganisationDocument | null]> {
-  const user = await userService.updateOrCreateUser({
+): Promise<[User | null, Organisation | null]> {
+  const user = await userService.createOrUpdate(req.idTokenPayload.sub, {
     kindeId: req.idTokenPayload.sub,
     email: req.idTokenPayload.email,
     firstName: req.idTokenPayload.given_name,
@@ -43,7 +41,7 @@ export async function getUserAndOrgFromRequestAndThrow(
   req: Request,
   userService: UserService,
   organisationService: OrganisationService,
-): Promise<[UserDocument, OrganisationDocument]> {
+): Promise<[User, Organisation]> {
   const [user, organisation] = await getUserAndOrgFromRequest(
     req,
     userService,
@@ -83,7 +81,7 @@ export class FunkController {
       this.organisationService,
     );
 
-    return this.funkService.getFunkItems(organisation._id);
+    return this.funkService.getFunkItems(organisation.id);
   }
 
   @Post('events/bulk')
@@ -138,7 +136,7 @@ export class FunkController {
     );
 
     const item = await this.funkService.getFunkItemByDeviceId(
-      organisation._id,
+      organisation.id,
       deviceId,
     );
     if (!item) {
@@ -156,7 +154,7 @@ export class FunkController {
       this.organisationService,
     );
 
-    return this.funkService.getFunkItemEventBulks(organisation._id);
+    return this.funkService.getFunkItemEventBulks(organisation.id);
   }
 
   @Get('events/bulk/export')
@@ -168,9 +166,9 @@ export class FunkController {
       this.userService,
       this.organisationService,
     );
-    3;
+
     const csvData = await this.funkService.exportFunkItemEventBulksAsCsv(
-      organisation._id,
+      organisation.id,
     );
 
     return csvData;
